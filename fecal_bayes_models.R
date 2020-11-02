@@ -1,0 +1,99 @@
+# Load packages
+library(nlme);library(MCMCglmm);library(brms)
+library(parallel); library(tidyverse); library(tidybayes);library(ggthemes)
+options(scipen = 999)
+
+#load data
+fecal <- read.csv("fecal.csv")
+#add phase
+fecal <- fecal %>% mutate(
+  "phase" = case_when(Year==2015 ~ "peak",
+                      Year==2016 ~ "peak",
+                      Year==2017 ~ "decline",
+                      Year==2018 ~ "decline"))
+str(fecal)
+fecal$Time <- as.factor(fecal$Time)
+fecal$phase <- as.factor(fecal$phase)
+fecal$Hare <- as.factor(fecal$Hare)
+fecal$Sex <- as.factor(fecal$Sex)
+
+#Model comparison
+bf_m1=bf(log(ng.g) ~ phase + (1|Hare))
+bf_m2=bf(log(ng.g) ~ phase + (0+phase||Hare))
+bf_m3=bf(log(ng.g) ~ phase + (1|Hare), sigma ~ 0+phase)
+bf_m4=bf(log(ng.g) ~ phase + (0+phase||Hare), sigma ~ 0+phase)
+
+
+fit_m1 <- brm(bf_m1, data = fecal,
+              cores = parallel:::detectCores(),
+              refresh=0,
+              save_pars = save_pars(group = T))
+fit_m2 <- brm(bf_m2, data = fecal,
+              cores = parallel:::detectCores(),
+              refresh=0,
+              save_pars = save_pars(group = T))
+fit_m3 <- brm(bf_m3, data = fecal,
+              cores = parallel:::detectCores(),
+              refresh=0,
+              save_pars = save_pars(group = T))
+fit_m4 <- brm(bf_m4, data = fecal,
+              cores = parallel:::detectCores(),
+              refresh=0,
+              save_pars = save_pars(group = T))
+
+#Create WAIC table
+WAIC_fits=WAIC(fit_m1,fit_m2,fit_m3,fit_m4)
+WAIC_fits
+
+#Or use LOO criterion in Stan
+LOO_fits=LOO(fit_m1,fit_m2,fit_m3,fit_m4)
+LOO_fits
+
+### Examining levels of variability within and between ----
+
+# Vh & Vw ??? by environments
+model.brms=bf(log(ng.g) ~ phase + Sex + Time + (0+phase||Hare), sigma ~ 0+phase)
+fit_model.brms <- brm(model.brms, data = fecal,
+                      cores    = parallel:::detectCores(),
+                      refresh = 0)
+summary(fit_model.brms) 
+plot(fit_model.brms)
+
+#make sure priors work
+prior_summary(fit_model.brms)
+#extract variance components 
+var.brms <- posterior_samples(fit_model.brms, 
+                              c("sd_Hare__phasepeak", # among unit sd E1
+                                "sd_Hare__phasedecline", # among unit sd E2
+                                "sigma_phasepeak", # within unit sd E1, log scale
+                                "sigma_phasedecline")) # within unit sd E2, log scale
+
+colnames(var.brms)=c("Vh.P", "Vh.D", "Vw.P", "Vw.D")
+var.brms=as.data.frame(var.brms)
+head(var.brms)
+#We need to square these values to express theme as variances and take the 
+#exponent for the residual standard deviation:
+
+var.brms$Vh.P=(var.brms$Vh.P)^2
+var.brms$Vh.D=(var.brms$Vh.D)^2
+var.brms$Vw.P=exp(var.brms$Vw.P)^2
+var.brms$Vw.D=exp(var.brms$Vw.D)^2
+
+var.brms$tau.P=var.brms$Vh.P/(var.brms$Vh.P+var.brms$Vw.P)
+var.brms$tau.D=var.brms$Vh.D/(var.brms$Vh.D+var.brms$Vw.D)
+
+var.brms$delta.Vh=var.brms$Vh.D-var.brms$Vh.P
+var.brms$delta.Vw=var.brms$Vw.D-var.brms$Vw.P
+var.brms$delta.tau=var.brms$tau.D-var.brms$tau.P
+
+var.brms=stack(var.brms)
+var.brms.table=var.brms %>% group_by(ind) %>%
+  summarise(mode=posterior.mode(as.mcmc(values)),
+            low.ci=HPDinterval(as.mcmc(values))[1],
+            up.ci=HPDinterval(as.mcmc(values))[2]) %>% data.frame()
+var.brms.table[,-1]=round(var.brms.table[,-1],2)
+var.brms.table
+
+# Similar, and as explained in the frequentist section, we can calculate $CV_i$ as:
+CVi <- sqrt(var.animal_id) / mean(data$meanDailyDisplacement)
+mean(CVi);HPDinterval(as.mcmc(CVi),0.95)
