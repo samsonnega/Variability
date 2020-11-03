@@ -12,11 +12,15 @@ fecal <- fecal %>% mutate(
                       Year==2017 ~ "decline",
                       Year==2018 ~ "decline"))
 str(fecal)
-fecal$Time <- as.factor(fecal$Time)
+fecal$Time <- as.numeric(fecal$Time)
+fecal$Year <- as.numeric(fecal$Year)
 fecal$phase <- as.factor(fecal$phase)
 fecal$Hare <- as.factor(fecal$Hare)
 fecal$Sex <- as.factor(fecal$Sex)
-
+str(fecal)
+#How many repeats across phase?
+table(fecal$phase,fecal$Hare)
+# id,day,and sex should be factor...all others numeric
 #Model comparison
 bf_m1=bf(log(ng.g) ~ phase + (1|Hare))
 bf_m2=bf(log(ng.g) ~ phase + (0+phase||Hare))
@@ -61,6 +65,11 @@ plot(fit_model.brms)
 
 #make sure priors work
 prior_summary(fit_model.brms)
+
+colnames(posterior_samples(fit_model.brms))[1:10]
+var.Hare <- posterior_samples(fit_model.brms)$"sd_Hare__Intercept"^2
+
+
 #extract variance components 
 var.brms <- posterior_samples(fit_model.brms, 
                               c("sd_Hare__phasepeak", # among unit sd E1
@@ -94,6 +103,79 @@ var.brms.table=var.brms %>% group_by(ind) %>%
 var.brms.table[,-1]=round(var.brms.table[,-1],2)
 var.brms.table
 
+#plot the posterior mode differences
+fecal.bayes <- var.brms %>% filter(.,ind=="delta.Vh" | 
+                                     ind=="delta.Vw" | 
+                                     ind=="delta.tau") %>% 
+  ggplot(., aes(x=values, y=ind, fill=ind)) +
+  geom_halfeyeh() + geom_vline(xintercept=0,linetype="dashed") +
+  ylab("") + xlab("standardized posterior mode") +
+  scale_fill_wsj() +
+  theme_base() + theme(legend.position = "none")
+
+fecal.bayes
+#plot just the phase difference in metrics
+fecal.bayes.2 <- var.brms %>% filter(.,ind=="Vh.P" | 
+                                     ind=="Vh.D") %>% 
+  ggplot(., aes(x=values, y=ind, fill=ind)) +
+  geom_halfeyeh() + geom_vline(xintercept=0,linetype="dashed") +
+  ylab("") + xlab("standardized posterior mode") +
+  scale_fill_wsj() +
+  theme_base() + theme(legend.position = "none")
+
+fecal.bayes.2
+
+fecal.bayes.3 <- var.brms %>% filter(.,ind=="Vw.P" | 
+                                       ind=="Vw.D") %>% 
+  ggplot(., aes(x=values, y=ind, fill=ind)) +
+  geom_halfeyeh() + geom_vline(xintercept=0,linetype="dashed") +
+  ylab("") + xlab("standardized posterior mode") +
+  scale_fill_wsj() +
+  theme_base() + theme(legend.position = "none")
+
+fecal.bayes.3
+
+### Now fit a basic model to examine trait repeatability 
+m1_brm <- brm(log(ng.g) ~ Time + I(Time^2) + Sex +
+                (1 | Hare) + (1 | Year/Time),
+              data = fecal,
+              warmup = 500,
+              iter = 3000,
+              thin=2,
+              chains = 2,
+              inits = "random",
+              cores = parallel:::detectCores(),
+              seed = 12345)
+m1_brm <- add_criterion(m1_brm, "waic")
+
+save(m1_brm,file = "m1_brm_fecal.rds")
+summary(m1_brm)
+plot(m1_brm)
+
+#Can calculate repeatability by using posterior samples
+
+colnames(posterior_samples(m1_brm))[1:8]
+var.animal_id <- posterior_samples(m1_brm)$"sd_Hare__Intercept"^2
+var.year <- posterior_samples(m1_brm)$"sd_Year__Intercept"^2
+var.year.month <- posterior_samples(m1_brm)$"sd_Year:Time__Intercept"^2
+var.res <- posterior_samples(m1_brm)$"sigma"^2
+
+#repeatability
+RDist <- var.animal_id / (var.animal_id + var.year.month + var.year + var.res)
+mean(RDist);HPDinterval(as.mcmc(RDist),0.95)
+
+RYear <- var.year / (var.animal_id + var.year.month + var.year + var.res)
+mean(RYear)
+
+RYearMonth <- var.year.month / (var.animal_id + var.year.month + var.year + var.res)
+mean(RYearMonth)
+
+RRes <- var.res / (var.animal_id + var.year.month + var.year + var.res)
+mean(RRes)
+
 # Similar, and as explained in the frequentist section, we can calculate $CV_i$ as:
-CVi <- sqrt(var.animal_id) / mean(data$meanDailyDisplacement)
+CVi <- sqrt(var.animal_id) / mean(fecal$ng.g)
 mean(CVi);HPDinterval(as.mcmc(CVi),0.95)
+
+
+
