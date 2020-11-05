@@ -152,3 +152,26 @@ fecal.bayes.3 <- var.brms %>% filter(.,ind=="Vw.P" |
   theme_base() + theme(legend.position = "none")
 
 fecal.bayes.3
+
+
+###stacked bar graph code
+
+#### Figure 1B: Variances per population ####
+Vh.P <- var.brms.table$mode[1]
+Vh.D <- var.brms.table$mode[2]
+Vw.P <- var.brms.table$mode[3]
+Vw.D <- var.brms.table$mode[4]
+
+data.vars=data.frame(V=c(Vh.P,Vh.D,Vw.P,Vw.D),
+                     level=factor(c("Vi","Vi","Vw","Vw")),
+                     env=factor(c("Peak","Decline","Peak","Decline"), 
+                                levels = c("Peak","Decline")))
+Fig1B=data.vars %>% 
+  ggplot(., aes(y=V, x=env, fill=level)) + 
+  geom_bar(position="stack", stat="identity", alpha=.8, colour="black") +
+  scale_fill_grey(start = 0.1, end = 0.8) + 
+  theme_base() +
+  theme(legend.title=element_blank(),legend.position=c(0.1, .9),
+        plot.background=element_blank()) +
+  ylab("Total variation") + xlab("")
+Fig1B
