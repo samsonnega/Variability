@@ -111,21 +111,21 @@ summarySEwithin <- function(data=NULL, measurevar, betweenvars=NULL, withinvars=
   merge(datac, ndatac)
 }
 
-condsum <- summarySEwithin(cond2, measurevar="bc", withinvars="phase",
-                           idvar="id", na.rm=FALSE, conf.interval=.95)
-str(condsum)
+AUCsum <- summarySEwithin(cort, measurevar="AUC", withinvars="phase",
+                           idvar="hare", na.rm=FALSE, conf.interval=.95)
+str(AUCsum)
 #make graph
 library(ggplot2)
 # Make the graph with the 95% confidence interval
 #order by phase
-condsum$phase <- factor(condsum$phase,levels = c("peak","decline"))
+AUCsum$phase <- factor(AUCsum$phase,levels = c("peak","decline"))
 
-(cond.phase <-ggplot(condsum, aes(x=phase, y=bc, group=1)) +
-    geom_errorbar(width=.1, aes(ymin=bc-ci, ymax=bc+ci)) +
+(cort.phase <-ggplot(AUCsum, aes(x=phase, y=AUC, group=1)) +
+    geom_errorbar(width=.1, aes(ymin=AUC-ci, ymax=AUC+ci)) +
     geom_point(shape=21, size=3, fill="black") +
     theme_classic() +
-    labs(y = "Standardized Body Condition Index", x = "Phase"))
+    labs(y = "Total Cort AUC", x = "Phase"))
 #Save it
-ggsave(cond.phase, 
-       file = "condition means.jpg", 
+ggsave(cort.phase, 
+       file = "AUC means.jpg", 
        width = 6, height = 6, unit = "in", dpi = 300)
