@@ -83,15 +83,9 @@ trk2 <- trk1 %>%
   mutate(steps = map(data, function(x) 
     x %>% track_resample(rate = minutes(45), tolerance = minutes(30)) %>% steps_by_burst()))
 
-trk3 <- trk2 %>% select(id, steps) %>% unnest(cols = "steps")
+trk3 <- trk2 %>% unnest_wider(steps) %>%
+  unnest_longer(burst_)
 
-
-trk3 <- trk2 %>% unnest(trk2, keep_empty = TRUE)
-unnest(trk3, cols = c(id,month))
-hoist(.data = trk2, .col = "steps")
-
-sample <- trk1 %>% unnest
-
-unnest_auto(sample, col ="ïd")
+unnest_auto(sample, col ="?d")
   ggplot(aes(sl_, fill = factor(id))) + geom_density(alpha = 0.4)
 
