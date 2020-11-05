@@ -66,7 +66,8 @@ trk <- data2 %>%
  make_track(x_, y_, t_, id = id)
 #add step lengths and also month
 trk <- trk %>% mutate(sl_ = step_lengths(.),
-                      month = lubridate::month(t_))
+                      month = lubridate::month(t_),
+                      year = lubridate::year(t_))
 
 summary(trk$sl_)
 # take a look at the mean sampling rate
@@ -75,17 +76,43 @@ summarize_sampling_rate(trk)
 trk1 <- trk %>% 
   nest(data = -"id")
 
-trk1 %>% mutate(sr = lapply(trk, summarize_sampling_rate)) %>%
-   select(id, sr) %>% unnest
-
 # resample within a range determined by the above summary
 trk2 <- trk1 %>% 
   mutate(steps = map(data, function(x) 
-    x %>% track_resample(rate = minutes(45), tolerance = minutes(30)) %>% steps_by_burst()))
+    x %>% track_resample(rate = minutes(45), tolerance = minutes(30)) %>% 
+      steps_by_burst()))
 
-trk3 <- trk2 %>% unnest_wider(steps) %>%
-  unnest_longer(burst_)
 
-unnest_auto(sample, col ="?d")
-  ggplot(aes(sl_, fill = factor(id))) + geom_density(alpha = 0.4)
+
+trk3 <- trk2 %>% 
+  hoist(data,
+        month = 'month',
+        year = 'year') 
+
+  
+trk3 <- trk2 %>% select(id, steps) %>% unnest(cols = "steps") 
+
+trk4 <-  trk3 %>%
+  mutate(month = lubridate::month(t2_),
+         year = lubridate::year(t2_),
+         day = lubridate::day(t2_)) %>% 
+  select(id = 'id',
+         burst = 'burst_',
+         step = 'sl_',
+         year = 'year',
+         month ='month',
+         day = 'day',
+         timestamp = 't2_')
+  
+
+write.csv(trk4, "step lengths.csv")
+
+    ggplot(aes(sl_, fill = factor(id))) + geom_density(alpha = 0.4)
+
+
+  
+  unnest_wider(steps) %>%
+  unnest_longer(burst_) %>% 
+  unnest_wider(data)
+
 
