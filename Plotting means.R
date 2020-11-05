@@ -1,5 +1,18 @@
 #################Plotting Means with error bars --------------
-
+fecal <- read.csv("fecal.csv")
+fecal$Date<-as.POSIXct(strptime(as.character(fecal$Date),"%d-%b-%y"))
+fecal2 <- fecal %>% mutate(
+phase = case_when(Year==2015 ~ "peak",
+                  Year==2016 ~ "peak",
+                  Year==2017 ~ "decline",
+                  Year==2018 ~ "decline"),
+month = lubridate::month(Date)) %>% 
+  select(year = 'Year',
+         month = 'month',
+         phase = 'phase',
+         cort = 'ng.g',
+         sex = 'Sex',
+         id = 'Hare')
 
 summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
                       conf.interval=.95, .drop=TRUE) {
@@ -111,21 +124,25 @@ summarySEwithin <- function(data=NULL, measurevar, betweenvars=NULL, withinvars=
   merge(datac, ndatac)
 }
 
-AUCsum <- summarySEwithin(cort, measurevar="AUC", withinvars="phase",
-                           idvar="hare", na.rm=FALSE, conf.interval=.95)
-str(AUCsum)
+FCMsum <- summarySEwithin(fecal2, measurevar="cort", withinvars=c("month","phase"),
+                           idvar="id", na.rm=FALSE, conf.interval=.95)
+str(Fsum)
 #make graph
 library(ggplot2)
 # Make the graph with the 95% confidence interval
 #order by phase
-AUCsum$phase <- factor(AUCsum$phase,levels = c("peak","decline"))
+FCMsum$phase <- factor(FCMsum$phase,levels = c("peak","decline"))
 
-(cort.phase <-ggplot(AUCsum, aes(x=phase, y=AUC, group=1)) +
-    geom_errorbar(width=.1, aes(ymin=AUC-ci, ymax=AUC+ci)) +
+(FCM.phase <-ggplot(FCMsum, aes(x=month, y=cort, group=phase, color = phase)) +
+    geom_errorbar(width=.1, aes(ymin=cort-ci, ymax=cort+ci)) +
     geom_point(shape=21, size=3, fill="black") +
+    scale_x_discrete(breaks=c("4","5","6","7","8","9","10"),
+                     labels=c("Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct")) +
     theme_classic() +
-    labs(y = "Total Cort AUC", x = "Phase"))
+    labs(y = "FCM (ng/g)", x = "Season"))
+
+
 #Save it
-ggsave(cort.phase, 
-       file = "AUC means.jpg", 
+ggsave(FCM.phase, 
+       file = "FCM monthly means.jpg", 
        width = 6, height = 6, unit = "in", dpi = 300)
