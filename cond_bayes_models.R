@@ -3,7 +3,7 @@ library(parallel); library(tidyverse); library(tidybayes);library(ggthemes);
 library(lubridate)
 options(scipen = 999)
 
-cond <- read.csv("condition.csv")
+cond <- read.csv("condition_males.csv")
 str(cond)
 
 ##add phase and month, and scale body condition residuals
@@ -12,22 +12,30 @@ cond <- cond %>% mutate(
                       year==2016 ~ "peak",
                       year==2017 ~ "decline",
                       year==2018 ~ "decline"),
-  "month" = month(as.POSIXlt(cond$Date, format = "%d-%b-%y")),
-  "scale_bc" = scale(bc))
+  "scale_bc" = scale(residuals))
+
+# just keep what you need
+
+cond2 <- cond %>%
+  filter(!is.na('scale_bc'))  %>%
+  select(id ='hare', 
+         bc = 'scale_bc',
+         month = 'month', 
+         year = 'year',
+         phase = 'phase')
 
 #make a bunch of factors
-cond$year <- as.numeric(cond$year)
-cond$phase <- as.factor(cond$phase)
-cond$hare <- as.factor(cond$hare)
-cond$month <- as.factor(cond$month)
-str(cond)
+cond2$year <- as.numeric(cond2$year)
+cond2$phase <- as.factor(cond2$phase)
+cond2$id <- as.factor(cond2$id)
+cond2$month <- as.factor(cond2$month)
+str(cond2)
 
 ###fit basic bayesian model using brms
 
-
-m1_brm <- brm(scale_bc ~ month +
-                (1 | hare) + (1 | year/month),
-              data = cond,
+m1_brm <- brm(bc ~ month +
+                (1 | id) + (1 | year/month),
+              data = cond2,
               warmup = 1000,
               iter = 3000,
               thin=2,
@@ -48,7 +56,7 @@ pairs(m1_brm)
 #extract posterior modes
 colnames(posterior_samples(m1_brm))[1:8]
 
-var.animal_id <- posterior_samples(m1_brm)$"sd_hare__Intercept"^2
+var.animal_id <- posterior_samples(m1_brm)$"sd_id__Intercept"^2
 var.year <- posterior_samples(m1_brm)$"sd_year__Intercept"^2
 var.year.month <- posterior_samples(m1_brm)$"sd_year:month__Intercept"^2
 var.res <- posterior_samples(m1_brm)$"sigma"^2
@@ -67,14 +75,14 @@ RRes <- var.res / (var.animal_id + var.year.month + var.year + var.res)
 mean(RRes)
 
 # Similar, and as explained in the frequentist section, we can calculate $CV_i$ as:
-CVi <- sqrt(var.animal_id) / mean(cond$bc)
+CVi <- sqrt(var.animal_id) / mean(cond2$bc)
 CV.cond <- mean(CVi);HPDinterval(as.mcmc(CVi),0.95)
 
 
 mean(var.animal_id)
 
 
-### examine levels of variability
+### examine levels of variability----
 # Vh & Vw ??? by environments
 model.brms=bf(bc ~ phase + month + (0+phase||hare), sigma ~ 0+phase)
 fit_model.brms <- brm(model.brms, data = cond,
