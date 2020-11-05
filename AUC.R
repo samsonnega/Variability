@@ -14,3 +14,13 @@ cortAUC_full <- cort %>% ## cortImputed = the dataset with imputed values replac
 ##(base = 1, dex = 2, 30 = 3, 60 = 4) and 'Cort3' as the variable
 
 write.csv(cortAUC_full, "cortAUC.csv")
+
+### compute BASE - DEX
+cortDEX <- cort %>% 
+  group_by(year, season, hare) %>% 
+  spread(key = bleed, value = cort) %>%
+  mutate(diff = `1`-`2`)
+
+write.csv(cortDEX, "cortDEX.csv")
+
+
