@@ -136,21 +136,23 @@ fecal.bayes.3 <- var.brms %>% filter(.,ind=="Vw.P" |
 fecal.bayes.3
 
 ### Now fit a basic model to examine trait repeatability 
-m1_brm <- brm(log(ng.g) ~ Time + I(Time^2) + Sex +
+m1_brm <- brm((log(ng.g)) ~ Time + Sex +
                 (1 | Hare) + (1 | Year/Time),
               data = fecal,
-              warmup = 500,
+              warmup = 1000,
               iter = 3000,
               thin=2,
               chains = 2,
               inits = "random",
               cores = parallel:::detectCores(),
-              seed = 12345)
+              seed = 12345,
+              control = list(adapt_delta = 0.99))
 m1_brm <- add_criterion(m1_brm, "waic")
 
 save(m1_brm,file = "m1_brm_fecal.rds")
 summary(m1_brm)
 plot(m1_brm)
+pp_check(m1_brm)
 
 #Can calculate repeatability by using posterior samples
 
