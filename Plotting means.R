@@ -124,7 +124,7 @@ summarySEwithin <- function(data=NULL, measurevar, betweenvars=NULL, withinvars=
   merge(datac, ndatac)
 }
 
-FCMsum <- summarySEwithin(fecal2, measurevar="cort", withinvars=c("month","phase"),
+FCMsum <- summarySEwithin(fecal2, measurevar="cort", withinvars=c("phase"),
                            idvar="id", na.rm=FALSE, conf.interval=.95)
 str(Fsum)
 #make graph
@@ -133,6 +133,12 @@ library(ggplot2)
 #order by phase
 FCMsum$phase <- factor(FCMsum$phase,levels = c("peak","decline"))
 
+(FCM.phase <-ggplot(FCMsum, aes(x=phase, y=cort)) +
+    geom_errorbar(width=.1, aes(ymin=cort-ci, ymax=cort+ci)) +
+    geom_point(shape=21, size=3, fill="black") +
+    theme_classic() +
+    labs(y = "FCM (ng/g)", x = "Phase"))
+#by month
 (FCM.phase <-ggplot(FCMsum, aes(x=month, y=cort, group=phase, color = phase)) +
     geom_errorbar(width=.1, aes(ymin=cort-ci, ymax=cort+ci)) +
     geom_point(shape=21, size=3, fill="black") +
@@ -140,9 +146,7 @@ FCMsum$phase <- factor(FCMsum$phase,levels = c("peak","decline"))
                      labels=c("Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct")) +
     theme_classic() +
     labs(y = "FCM (ng/g)", x = "Season"))
-
-
 #Save it
 ggsave(FCM.phase, 
-       file = "FCM monthly means.jpg", 
+       file = "FCM means.jpg", 
        width = 6, height = 6, unit = "in", dpi = 300)
