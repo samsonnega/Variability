@@ -7,28 +7,25 @@ cond <- read.csv("condition_males.csv")
 str(cond)
 
 ##add phase and month, and scale body condition residuals
-cond <- cond %>% mutate(
+cond2 <- cond %>% mutate(
   "phase" = case_when(year==2015 ~ "peak",
                       year==2016 ~ "peak",
                       year==2017 ~ "decline",
-                      year==2018 ~ "decline"),
-  "scale_bc" = scale(residuals))
+                      year==2018 ~ "decline")) %>% 
+    select(id = 'hare',
+           phase = 'phase',
+           year = 'year',
+           month = 'month',
+           bc = 'residuals',
+           rhf = 'RHF',
+           wt = 'weight')
 
-# just keep what you need
-
-cond2 <- cond %>%
-  filter(!is.na('scale_bc'))  %>%
-  select(id ='hare', 
-         bc = 'scale_bc',
-         month = 'month', 
-         year = 'year',
-         phase = 'phase')
-
-#make a bunch of factors
+# id,day,and sex should be factor...all others numeric
+#Model comparison
 cond2$year <- as.numeric(cond2$year)
 cond2$phase <- as.factor(cond2$phase)
 cond2$id <- as.factor(cond2$id)
-cond2$month <- as.factor(cond2$month)
+cond2$month <- as.numeric(cond2$month)
 str(cond2)
 
 ###fit basic bayesian model using brms
@@ -51,9 +48,8 @@ save(m1_brm,file = "m1_brm_cond.rds")
 load("m1_brm_cond.rds")
 summary(m1_brm)
 plot(m1_brm)
-pp_check(m1_brm)
 pairs(m1_brm)
-
+pp_check(m1_brm)
 #extract posterior modes
 colnames(posterior_samples(m1_brm))[1:8]
 
@@ -83,15 +79,14 @@ CV.cond <- mean(CVi);HPDinterval(as.mcmc(CVi),0.95)
 mean(var.animal_id)
 
 
-### examine levels of variability----
+### examine levels of variability
 # Vh & Vw ??? by environments
-model.brms=bf(bc ~ phase + month + (0+phase||id), sigma ~ 0+phase)
-fit_model.brms <- brm(model.brms, data = cond2,
+model.brms=bf(bc ~ phase + month + (0+phase||hare), sigma ~ 0+phase)
+fit_model.brms <- brm(model.brms, data = cond,
                       cores    = parallel:::detectCores(),
                       refresh = 0)
 summary(fit_model.brms) 
 plot(fit_model.brms)
-VarCorr(fit_model.brms)
 
 #make sure priors work
 prior_summary(fit_model.brms)
