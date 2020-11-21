@@ -62,6 +62,17 @@ fit_model.brms <- brm(model.brms, data = fecal,
                       refresh = 0)
 summary(fit_model.brms) 
 plot(fit_model.brms)
+get_variables(fit_model.brms)
+
+#new model just for plotting phase means
+
+fit2 <- 
+  brm(data = fecal,
+      ng.g ~ 1 + (1 | phase),
+      prior = c(prior(normal(0, 1), class = Intercept),
+                prior(student_t(3, 0, 1), class = sigma),
+                prior(student_t(3, 0, 1), class = sd)),
+      cores = parallel:::detectCores())
 
 #make sure priors work
 prior_summary(fit_model.brms)
@@ -153,7 +164,7 @@ save(m1_brm,file = "m1_brm_fecal.rds")
 summary(m1_brm)
 plot(m1_brm)
 pp_check(m1_brm)
-
+load("m1_brm_fecal.rds")
 #Can calculate repeatability by using posterior samples
 
 colnames(posterior_samples(m1_brm))[1:8]
@@ -176,8 +187,37 @@ RRes <- var.res / (var.animal_id + var.year.month + var.year + var.res)
 mean(RRes)
 
 # Similar, and as explained in the frequentist section, we can calculate $CV_i$ as:
-CVi <- sqrt(var.animal_id) / mean(fecal$ng.g)
-mean(CVi);HPDinterval(as.mcmc(CVi),0.95)
+CVi <- (var.animal_id) / ((posterior_samples(m1_brm)$"b_Intercept"^2)^2)
+CV <-  mean(CVi);HPDinterval(as.mcmc(CVi),0.95)
+100*(CV)
 
+
+# plot fitted draws by phase
+library(magrittr)
+library(dplyr)
+library(purrr)
+library(forcats)
+library(tidyr)
+library(modelr)
+library(ggdist)
+library(tidybayes)
+library(ggplot2)
+library(cowplot)
+library(rstan)
+library(brms)
+library(ggrepel)
+library(RColorBrewer)
+library(gganimate)
+
+as_tibble(fecal)
+fecal %>%
+  data_grid(phase) %>%
+  add_fitted_draws(fit2, dpar = c("mu", "sigma")) %>%
+  sample_draws(30) %>%
+  ggplot(aes(y = phase)) +
+  stat_dist_slab(aes(dist = "norm", arg1 = mu, arg2 = sigma),
+                 slab_color = "gray65", alpha = 1/10, fill = NA
+  ) +
+  geom_point(aes(x = ng.g), data = fecal, shape = 21, fill = "#9ECAE1", size = 2)
 
 
