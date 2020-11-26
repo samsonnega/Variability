@@ -58,16 +58,16 @@ plot(kde1)
 plot(mcp1, add.relocations = FALSE, add = TRUE, border = "red")
 
 # now nest data by id to apply hr to all individuals
-dat1 <- trk %>% 
-  nest(data = -"id")
-
+dat1 <- trk %>%
+  nest(data = c(x_, y_, t_))
+dat1$data[[1]]
 # now apply home range function for different estimators to all data
 hr1 <- dat1 %>%
   mutate(
-    hr_mcp = map(trk, hr_mcp),
-    hr_kde = map(trk, hr_kde),
-    hr_locoh = map(trk, ~ hr_locoh(., n = ceiling(sqrt(nrow(.))))),
-    hr_akde_iid = map(trk, ~ hr_akde(., fit_ctmm(., "iid"))),
-    hr_akde_ou = map(trk, ~ hr_akde(., fit_ctmm(., "ou")))
+    hr_mcp = map(data, hr_mcp),
+    hr_kde = map(data, hr_kde),
+    hr_locoh = map(data, ~ hr_locoh(., n = ceiling(sqrt(nrow(.))))),
+    hr_akde_iid = map(data, ~ hr_akde(., fit_ctmm(., "iid"))),
+    hr_akde_ou = map(data, ~ hr_akde(., fit_ctmm(., "ou")))
   )
 
