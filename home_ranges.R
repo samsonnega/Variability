@@ -9,11 +9,17 @@ devtools::install_github("jmsigner/amt")
 library(amt)
 library(sf)
 
-#Take what matters
+#first fix date
+data$date2<-as.POSIXct(strptime(as.character(data$date2),"%d/%m/%Y %H:%M"))
+
+#Take what matters and add year
 data2 <- data %>%
   filter(!is.na('y'))  %>%
+  mutate(year = lubridate::year(date2)) %>% 
   select(x_ = 'x', y_ = 'y',
-         t_ = 'date2', id = 'id')
+         t_ = 'date2', id = 'id',
+         p = 'phase', yr = 'year')
+
 #make sure the dataset is complete
 all(complete.cases(data2))
 #check for duplicated time stamps
@@ -67,7 +73,20 @@ hr1 <- dat1 %>%
     hr_mcp = map(data, hr_mcp),
     hr_kde = map(data, hr_kde),
     hr_locoh = map(data, ~ hr_locoh(., n = ceiling(sqrt(nrow(.))))),
-    hr_akde_iid = map(data, ~ hr_akde(., fit_ctmm(., "iid"))),
-    hr_akde_ou = map(data, ~ hr_akde(., fit_ctmm(., "ou")))
+    hr_akde_iid = map(data, ~ hr_akde(., fit_ctmm(., "auto"))),
+    hr_akde_ou = map(data, ~ hr_akde(., fit_ctmm(., "auto")))
   )
 
+saveRDS(hr1, "hr1.RDS")
+
+hr2 <- hr1 %>% select(-data) %>%
+  pivot_longer(hr_mcp:hr_akde_ou, names_to = "estimator",
+               values_to = "hr")
+
+hr2.area <- hr2 %>%
+  mutate(hr_area = map(hr, hr_area)) %>%
+  unnest(cols = hr_area)
+
+saveRDS(hr2.area, "hr.long.RDS")
+
+head(hr2.area, 2)
