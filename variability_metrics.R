@@ -30,7 +30,7 @@
 library(lme4);library(arm);library(MuMIn);library(tidyverse)
 library(plyr);library(broom);library(coda);library(grid)
 library(gridExtra);library(brms); library(broom.mixed); library(merTools);
-library(tidybayes);library(parallel)
+library(tidybayes);library(parallel); library(MCMCglmm)
 
 fecal <- read.csv("fecal.csv")
 #add phase
@@ -40,28 +40,14 @@ fecal <- fecal %>% mutate(
                       Year==2017 ~ "decline",
                       Year==2018 ~ "decline"))
 ####BAYESIAN MODELS----
-my.cores <- detectCores()
-m1_brm <- brm(ng.g ~ Month  + Sex + Year
-                (1 | Hare) + (1 | Year/Month),
-              data = data,
-              warmup = 500,
-              iter = 3000,
-              thin=2,
-              chains = 2,
-              inits  = "random",
-              seed = 12345,
-              cores  = my.cores)
 
-m1_brm <- add_criterion(m1_brm, "waic")
-
-m1_brm <- readRDS("m1_brm.rds")
-summary(m1_brm)
 
 model.brms=bf(log(ng.g) ~ phase + (0+phase||Hare), sigma ~ 0+phase)
 fit_model.brms <- brm(model.brms, data = fecal,
                       cores    = parallel:::detectCores(),
                       refresh = 0)
 summary(fit_model.brms) 
+plot(fit_model.brms)
 
 # We should make it a habit to inspect a) the effective sample size and b) the 
 # Rhat parameter to make sure that our model converged. In a nutshell, we want 
@@ -116,41 +102,47 @@ mean(CVi);HPDinterval(as.mcmc(CVi),0.95)
 
 
 ####BRMS model comparison with WAIC----
-# Vh & Vw ??? by environments
-model.brms=bf(y ~ env + (0+env||unit), sigma ~ 0+env)
 
-fit_model.brms <- brm(model.brms, data = df,
+library(nlme);library(MCMCglmm);library(brms)
+library(parallel); library(tidyverse); library(tidybayes);library(ggthemes)
+options(scipen = 999)
+
+
+# Vh & Vw ??? by environments
+model.brms=bf(log(ng.g) ~ phase + (0+phase||Hare), sigma ~ 0+phase)
+fit_model.brms <- brm(model.brms, data = fecal,
                       cores    = parallel:::detectCores(),
                       refresh = 0)
 summary(fit_model.brms) 
+plot(fit_model.brms)
 
 #make sure priors work
 prior_summary(fit_model.brms)
 #extract variance components 
 var.brms <- posterior_samples(fit_model.brms, 
-                              c("sd_unit__envE1", # among unit sd E1
-                                "sd_unit__envE2", # among unit sd E2
-                                "b_sigma_envE1", # within unit sd E1, log scale
-                                "b_sigma_envE2")) # within unit sd E2, log scale
+                              c("sd_Hare__phasepeak", # among unit sd E1
+                                "sd_Hare__phasedecline", # among unit sd E2
+                                "sigma_phasepeak", # within unit sd E1, log scale
+                                "sigma_phasedecline")) # within unit sd E2, log scale
 
-colnames(var.brms)=c("Vh.E1", "Vh.E2", "Vw.E1", "Vw.E2")
+colnames(var.brms)=c("Vh.P", "Vh.D", "Vw.P", "Vw.D")
 var.brms=as.data.frame(var.brms)
 head(var.brms)
 
 #We need to square these values to express theme as variances and take the 
 #exponent for the residual standard deviation:
 
-var.brms$Vh.E1=(var.brms$Vh.E1)^2
-var.brms$Vh.E2=(var.brms$Vh.E2)^2
-var.brms$Vw.E1=exp(var.brms$Vw.E1)^2
-var.brms$Vw.E2=exp(var.brms$Vw.E2)^2
+var.brms$Vh.P=(var.brms$Vh.P)^2
+var.brms$Vh.D=(var.brms$Vh.D)^2
+var.brms$Vw.P=exp(var.brms$Vw.P)^2
+var.brms$Vw.D=exp(var.brms$Vw.D)^2
 
-var.brms$tau.E1=var.brms$Vh.E1/(var.brms$Vh.E1+var.brms$Vw.E1)
-var.brms$tau.E2=var.brms$Vh.E2/(var.brms$Vh.E2+var.brms$Vw.E2)
+var.brms$tau.P=var.brms$Vh.P/(var.brms$Vh.P+var.brms$Vw.P)
+var.brms$tau.D=var.brms$Vh.D/(var.brms$Vh.D+var.brms$Vw.D)
 
-var.brms$delta.Vh=var.brms$Vh.E2-var.brms$Vh.E1
-var.brms$delta.Vw=var.brms$Vw.E2-var.brms$Vw.E1
-var.brms$delta.tau=var.brms$tau.E2-var.brms$tau.E1
+var.brms$delta.Vh=var.brms$Vh.D-var.brms$Vh.P
+var.brms$delta.Vw=var.brms$Vw.D-var.brms$Vw.P
+var.brms$delta.tau=var.brms$tau.D-var.brms$tau.P
 
 var.brms=stack(var.brms)
 var.brms.table=var.brms %>% group_by(ind) %>%
@@ -161,28 +153,28 @@ var.brms.table[,-1]=round(var.brms.table[,-1],2)
 var.brms.table
 
 #Model comparison
-bf_m1=bf(y ~ env + (1|unit))
-bf_m2=bf(y ~ env + (0+env||unit))
-bf_m3=bf(y ~ env + (1|unit), sigma ~ 0+env)
-bf_m4=bf(y ~ env + (0+env||unit), sigma ~ 0+env)
+bf_m1=bf(log(ng.g) ~ phase + (1|Hare))
+bf_m2=bf(log(ng.g) ~ phase + (0+phase||Hare))
+bf_m3=bf(log(ng.g) ~ phase + (1|Hare), sigma ~ 0+phase)
+bf_m4=bf(log(ng.g) ~ phase + (0+phase||Hare), sigma ~ 0+phase)
 
 
-fit_m1 <- brm(bf_m1, data = df,
+fit_m1 <- brm(bf_m1, data = fecal,
               cores = parallel:::detectCores(),
               refresh=0,
-              save_ranef=T)
-fit_m2 <- brm(bf_m2, data = df,
+              save_pars = save_pars(group = T))
+fit_m2 <- brm(bf_m2, data = fecal,
               cores = parallel:::detectCores(),
               refresh=0,
-              save_ranef=T)
-fit_m3 <- brm(bf_m3, data = df,
+              save_pars = save_pars(group = T))
+fit_m3 <- brm(bf_m3, data = fecal,
               cores = parallel:::detectCores(),
               refresh=0,
-              save_ranef=T)
-fit_m4 <- brm(bf_m4, data = df,
+              save_pars = save_pars(group = T))
+fit_m4 <- brm(bf_m4, data = fecal,
               cores = parallel:::detectCores(),
               refresh=0,
-              save_ranef=T)
+              save_pars = save_pars(group = T))
 
 #Create WAIC table
 WAIC_fits=WAIC(fit_m1,fit_m2,fit_m3,fit_m4)
@@ -233,9 +225,26 @@ V.diff.mcmc.table
 plot(model.mcmc)
 #looks good, priors ok
 
+
+
+
+###################GRAPHS----
+library(ggthemes)
+library(plotMCMC)
+plotTrace(allChains)
+
+
+fecal.bayes <- var.brms %>% filter(.,ind=="delta.Vh" | 
+                      ind=="delta.Vw" | 
+                      ind=="delta.tau") %>% 
+  ggplot(., aes(x=values, y=ind, fill=ind)) +
+  stat_eye() + geom_vline(xintercept=0,linetype="dashed") +
+  ylab("") + xlab("standardized posterior mode") +
+  theme_base() + theme(legend.position = "none")
+
 fecal %>%
   modelr::data_grid(phase) %>%
-  add_draws(model.mcmc, dpar = c("mu", "sigma")) %>%
+  add_fitted_draws(fit_model.brms, dpar = c("mu", "sigma")) %>%
   sample_draws(30) %>%
   ggplot(aes(y = phase)) +
   stat_dist_slab(aes(dist = "norm", arg1 = mu, arg2 = sigma),
@@ -243,21 +252,9 @@ fecal %>%
   ) +
   geom_point(aes(x = ng.g), data = fecal, shape = 21, fill = "#9ECAE1", size = 2)
 
-allChains <- as.mcmc(cbind(model.mcmc$Sol,model.mcmc$VCV))
-
-###################GRAPHS----
-library(plotMCMC)
-plotTrace(allChains)
-
-
-var.brms %>% filter(.,ind=="delta.Vh" | 
-                      ind=="delta.Vw" | 
-                      ind=="delta.tau") %>% 
-  ggplot(., aes(x=values, y=ind, fill=ind)) +
-  geom_halfeyeh() + geom_vline(xintercept=0,linetype="dashed") +
-  scale_fill_wsj() +
-  ylab("") + xlab("") +
-  theme_base() + theme(legend.position = "none")
+ggsave(fecal.bayes, 
+       file = "fecal.bayes.jpg", 
+       width = 6, height = 6, unit = "in", dpi = 300)
 
 #Theme from Hertel et al.
 posteriorBT <- posterior_samples(m1_brm)[,9:43] %>%
